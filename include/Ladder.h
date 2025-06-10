@@ -14,11 +14,17 @@ public:
   struct Order {
       OrderId id;
       double quantity;
+
+      bool operator==(const Order &other) const {
+        // weak equality, only requires quantity to be the same
+        return quantity == other.quantity;
+        // strong equality, requires id to be the same
+        // return id == other.id && quantity == other.quantity;
+      }
   };
 
   struct Level {
     using OrderList = std::list<Order>;
-
     OrderList orders_;                                                     // FIFO queue
     std::unordered_map<OrderId, typename OrderList::iterator> order_map_;  // Fast lookup
     double total_quantity_ = 0.0;
@@ -30,13 +36,19 @@ public:
       total_quantity_ += qty;
     }
 
-    void modify(OrderId id, double new_qty) {
+    void modifyId(OrderId id, double new_qty) {
       auto it = order_map_.find(id);
       if (it != order_map_.end()) {
         total_quantity_ -= it->second->quantity;
         it->second->quantity = new_qty;
         total_quantity_ += new_qty;
       }
+    }
+
+    // clears the entire level
+    void modifyLevel(OrderId id, double new_qty) {
+      clear();
+      add(id, new_qty);
     }
 
     void remove(OrderId id) {
@@ -56,23 +68,52 @@ public:
 
     bool empty() const { return orders_.empty(); }
 
+    bool operator==(const Level &other) const {
+      return orders_ == other.orders_ && total_quantity_ == other.total_quantity_;
+    }
+
   };
   using LevelMap = std::map<Price, Level, Compare>; // descending (std::greater<Price>) for bids
                                                     // ascending (std::less<Price>) for asks
   LevelMap levels_;
 
-  void add_order(Price price, OrderId id, double qty) {
+  void addOrderId(Price price, OrderId id, double qty) {
     levels_[price].add(id, qty);
   }
 
-  void modify_order(Price price, OrderId id, double new_qty) {
+  // WARN: modifies based on id
+  void modifyOrderId(Price price, OrderId id, double new_qty) {
     auto it = levels_.find(price);
     if (it != levels_.end()) {
-      it->second.modify(id, new_qty);
+      it->second.modifyId(id, new_qty);
     }
   }
 
-  void remove_order(Price price, OrderId id) {
+  // If the order with id exists, modify its quantity
+  // else add it as a new Level
+  void addModifyOrderId(Price price, OrderId id, double qty) {
+    auto it = levels_.find(price);
+    if (it != levels_.end()) {
+      it->second.modifyId(id, qty);
+    } else {
+      addOrderId(price, id, qty);
+    }
+  }
+
+  // modifies the entire level, useful for order books that don't have
+  // queues, but only entire quantities available at a given level
+  void addModifyLevel(Price price, OrderId id, double qty) {
+    auto it = levels_.find(price);
+    if (it != levels_.end()) {
+      it->second.modifyLevel(id, qty);
+    } else {
+      Level new_level;
+      new_level.add(id, qty);
+      levels_[price] = std::move(new_level);
+    }
+  }
+
+  void removeOrder(Price price, OrderId id) {
     auto it = levels_.find(price);
     if (it != levels_.end()) {
       it->second.remove(id);
@@ -89,6 +130,10 @@ public:
   }
 
   void clear() { levels_.clear(); }
+
+  bool operator==(const Ladder &other) const {
+    return levels_ == other.levels_;
+  }
 };
 
 #endif
