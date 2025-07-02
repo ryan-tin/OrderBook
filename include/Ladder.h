@@ -123,6 +123,17 @@ public:
     }
   }
 
+  void removeLevel(Price price) {
+    auto it = levels_.find(price);
+    if (it != levels_.end()) {
+      levels_.erase(it);
+    } 
+    // else {
+    //   std::cerr << "Error: Level with price " << price << " not found." << std::endl;
+    // }
+
+  }
+
   const Level *best_level() const {
     if (!levels_.empty())
       return &levels_.begin()->second;
@@ -130,6 +141,7 @@ public:
   }
 
   void clear() { levels_.clear(); }
+  bool empty() const { return levels_.empty(); }
 
   bool operator==(const Ladder &other) const {
     return levels_ == other.levels_;
